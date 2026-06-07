@@ -6,7 +6,6 @@ import {
   getDirectionDelta,
   calculateScore,
   formatTime,
-  computeOptimalPath,
   placeDecoration as placeDecoUtil,
   removeDecoration as removeDecoUtil,
   canPlaceDecoration,
@@ -14,7 +13,9 @@ import {
 import type { ScoreResult } from "../types/game";
 
 export function useGameLogic() {
-  const [gameState, setGameState] = useState<GameState>(() => createInitialState());
+  const [gameState, setGameState] = useState<GameState>(() =>
+    createInitialState(),
+  );
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -66,11 +67,6 @@ export function useGameLogic() {
       const newPath = [...prev.path, { x: newX, y: newY, direction }];
       const isCompleted = newMowedCells >= prev.totalGrassCells;
 
-      let optimalPath = prev.optimalPath;
-      if (isCompleted && !optimalPath) {
-        optimalPath = computeOptimalPath(prev.grid, prev.mower.x, prev.mower.y);
-      }
-
       return {
         ...prev,
         grid: newGrid,
@@ -79,8 +75,9 @@ export function useGameLogic() {
         path: newPath,
         completed: isCompleted,
         mode: isCompleted ? "completed" : prev.mode,
-        optimalPath,
-        elapsedTime: isCompleted ? Date.now() - prev.startTime : prev.elapsedTime,
+        elapsedTime: isCompleted
+          ? Date.now() - prev.startTime
+          : prev.elapsedTime,
       };
     });
   }, []);
@@ -93,17 +90,10 @@ export function useGameLogic() {
   }, []);
 
   const toggleOptimalPath = useCallback(() => {
-    setGameState((prev) => {
-      let optimalPath = prev.optimalPath;
-      if (!optimalPath) {
-        optimalPath = computeOptimalPath(prev.grid, prev.mower.x, prev.mower.y);
-      }
-      return {
-        ...prev,
-        showOptimalPath: !prev.showOptimalPath,
-        optimalPath,
-      };
-    });
+    setGameState((prev) => ({
+      ...prev,
+      showOptimalPath: !prev.showOptimalPath,
+    }));
   }, []);
 
   const enterGardenMode = useCallback(() => {
@@ -190,9 +180,10 @@ export function useGameLogic() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [moveMower, gameState.mode]);
 
-  const score: ScoreResult | null = gameState.completed || gameState.mode === "garden"
-    ? calculateScore(gameState)
-    : null;
+  const score: ScoreResult | null =
+    gameState.completed || gameState.mode === "garden"
+      ? calculateScore(gameState)
+      : null;
 
   return {
     gameState,
@@ -200,7 +191,9 @@ export function useGameLogic() {
     moveMower,
     resetGame,
     formattedTime: formatTime(gameState.elapsedTime),
-    completionPercent: Math.round((gameState.mowedCells / gameState.totalGrassCells) * 100),
+    completionPercent: Math.round(
+      (gameState.mowedCells / gameState.totalGrassCells) * 100,
+    ),
     toggleOptimalPath,
     enterGardenMode,
     exitGardenMode,

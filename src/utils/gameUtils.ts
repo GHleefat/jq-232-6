@@ -116,6 +116,8 @@ export function createInitialState(): GameState {
 
   const path: PathPoint[] = [{ x: startX, y: startY, direction: "right" }];
 
+  const optimalPath = computeOptimalPath(grid, startX, startY);
+
   const initialGrid = grid.map((row) => row.map((cell) => ({ ...cell })));
   if (initialGrid[startY][startX].type === "grass") {
     initialGrid[startY][startX].type = "mowed";
@@ -135,7 +137,7 @@ export function createInitialState(): GameState {
     path,
     mode: "playing",
     showOptimalPath: false,
-    optimalPath: null,
+    optimalPath,
     selectedDecoration: null,
   };
 }
@@ -188,6 +190,52 @@ export function calculateTurns(path: PathPoint[]): number {
   return turns;
 }
 
+function isWalkable(grid: Cell[][], x: number, y: number): boolean {
+  if (x < 0 || x >= GRID_COLS || y < 0 || y >= GRID_ROWS) return false;
+  const cell = grid[y][x];
+  return cell.type !== "flower" && cell.type !== "path";
+}
+
+function bfsPath(
+  grid: Cell[][],
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+): { x: number; y: number; direction: Direction }[] | null {
+  const queue: {
+    x: number;
+    y: number;
+    path: { x: number; y: number; direction: Direction }[];
+  }[] = [{ x: fromX, y: fromY, path: [] }];
+  const visited = new Set<string>();
+  visited.add(`${fromX},${fromY}`);
+
+  const directions: Direction[] = ["right", "down", "left", "up"];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.x === toX && current.y === toY) {
+      return current.path;
+    }
+    for (const d of directions) {
+      const { dx, dy } = getDirectionDelta(d);
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const key = `${nx},${ny}`;
+      if (!visited.has(key) && isWalkable(grid, nx, ny)) {
+        visited.add(key);
+        queue.push({
+          x: nx,
+          y: ny,
+          path: [...current.path, { x: nx, y: ny, direction: d }],
+        });
+      }
+    }
+  }
+  return null;
+}
+
 export function computeOptimalPath(
   grid: Cell[][],
   startX: number,
@@ -204,8 +252,7 @@ export function computeOptimalPath(
   const grassCells: { x: number; y: number }[] = [];
   for (let y = 0; y < GRID_ROWS; y++) {
     for (let x = 0; x < GRID_COLS; x++) {
-      const cell = grid[y][x];
-      if (cell.type !== "flower" && cell.type !== "path") {
+      if (isWalkable(grid, x, y)) {
         grassCells.push({ x, y });
       }
     }
@@ -225,8 +272,7 @@ export function computeOptimalPath(
       nextY >= 0 &&
       nextY < GRID_ROWS &&
       !visited.has(key) &&
-      grid[nextY][nextX].type !== "flower" &&
-      grid[nextY][nextX].type !== "path"
+      isWalkable(grid, nextX, nextY)
     ) {
       path.push({ x: nextX, y: nextY, direction });
       visited.add(key);
@@ -247,8 +293,7 @@ export function computeOptimalPath(
           ny >= 0 &&
           ny < GRID_ROWS &&
           !visited.has(nkey) &&
-          grid[ny][nx].type !== "flower" &&
-          grid[ny][nx].type !== "path"
+          isWalkable(grid, nx, ny)
         ) {
           direction = d;
           found = true;
@@ -267,18 +312,17 @@ export function computeOptimalPath(
           }
         }
         if (!nearest) break;
-        const tx = nearest.x;
-        const ty = nearest.y;
-        while (currentX !== tx || currentY !== ty) {
-          if (currentX < tx) direction = "right";
-          else if (currentX > tx) direction = "left";
-          else if (currentY < ty) direction = "down";
-          else direction = "up";
-          const delta = getDirectionDelta(direction);
-          currentX += delta.dx;
-          currentY += delta.dy;
-          path.push({ x: currentX, y: currentY, direction });
-          visited.add(`${currentX},${currentY}`);
+        const route = bfsPath(grid, currentX, currentY, nearest.x, nearest.y);
+        if (route && route.length > 0) {
+          for (const step of route) {
+            path.push(step);
+            visited.add(`${step.x},${step.y}`);
+            direction = step.direction;
+          }
+          currentX = nearest.x;
+          currentY = nearest.y;
+        } else {
+          break;
         }
       }
     }
